@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Todo.Data;
 using Todo.Models;
+using Todo.Models.ViewModels;
 
 namespace Todo.Controllers
 {
@@ -25,15 +26,60 @@ namespace Todo.Controllers
         }
 
         // GET: TodoItems
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string filterButton)
         {
             var user = await GetCurrentUserAsync();
-            var items = await _context.TodoItem
-                .Include(t => t.TodoStatus)
-                .Where(tdi => tdi.ApplicationUserId == user.Id)
-                .ToListAsync();
 
-            return View(items);
+            if (filterButton == "To Do")
+            {
+                var items = await _context.TodoItem
+                    .Include(t => t.TodoStatus)
+                    .Where(tdi => tdi.ApplicationUserId == user.Id)
+                    .Where(ti => ti.TodoStatusId == 1)
+                    .ToListAsync();
+
+                return View(items);
+            }
+            if (filterButton == "In Progress")
+            {
+                var items = await _context.TodoItem
+                    .Include(t => t.TodoStatus)
+                    .Where(tdi => tdi.ApplicationUserId == user.Id)
+                    .Where(ti => ti.TodoStatusId == 2)
+                    .ToListAsync();
+
+                return View(items);
+            }
+            if (filterButton == "Done")
+            {
+                var items = await _context.TodoItem
+                    .Include(t => t.TodoStatus)
+                    .Where(tdi => tdi.ApplicationUserId == user.Id)
+                    .Where(ti => ti.TodoStatusId == 3)
+                    .ToListAsync();
+
+                return View(items);
+            }
+            if (filterButton == "All")
+            {
+                var items = await _context.TodoItem
+                    .Include(t => t.TodoStatus)
+                    .Where(tdi => tdi.ApplicationUserId == user.Id)
+                    .ToListAsync();
+
+                return View(items);
+            }
+            else
+            {
+                var items = await _context.TodoItem
+                    .Include(t => t.TodoStatus)
+                    .Where(tdi => tdi.ApplicationUserId == user.Id)
+                    .ToListAsync();
+
+                return View(items);
+            }
+
+
         }
 
         // GET: TodoItems/Details/5
@@ -88,21 +134,35 @@ namespace Todo.Controllers
         }
 
         // GET: TodoItems/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        public async Task<IActionResult> Edit(int id)
         {
-            if (id == null)
+            var item = await _context.TodoItem.FirstOrDefaultAsync(ti => ti.Id == id);
+            var loggedInUser = await GetCurrentUserAsync();
+            var TodoStatuses = await _context.TodoStatus
+               .Select(td => new SelectListItem() { Text = td.Title, Value = td.Id.ToString() })
+               .ToListAsync();
+
+            if (item == null)
             {
                 return NotFound();
             }
 
-            var todoItem = await _context.TodoItem.FindAsync(id);
-            if (todoItem == null)
+
+            var viewModel = new TodoItemFormViewModel()
+            {
+                Id = id,
+                Title = item.Title,
+                TodoStatusId = item.TodoStatusId,
+                TodoStatusOptions = TodoStatuses,
+
+            };
+
+            if (item.ApplicationUserId != loggedInUser.Id)
             {
                 return NotFound();
             }
-            ViewData["ApplicationUserId"] = new SelectList(_context.ApplicationUser, "Id", "Id", todoItem.ApplicationUserId);
-            ViewData["TodoStatusId"] = new SelectList(_context.TodoStatus, "Id", "Title", todoItem.TodoStatusId);
-            return View(todoItem);
+
+            return View(viewModel);
         }
 
         // POST: TodoItems/Edit/5
@@ -110,36 +170,30 @@ namespace Todo.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,TodoStatusId,ApplicationUserId")] TodoItem todoItem)
+        public async Task<ActionResult> Edit(int id, TodoItemFormViewModel toDoViewItem)
         {
-            if (id != todoItem.Id)
+            try
             {
-                return NotFound();
-            }
 
-            if (ModelState.IsValid)
-            {
-                try
+                var toDoItem = new TodoItem()
                 {
-                    _context.Update(todoItem);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!TodoItemExists(todoItem.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
+                    Id = toDoViewItem.Id,
+                    Title = toDoViewItem.Title,
+                    TodoStatusId = toDoViewItem.TodoStatusId
+                };
+
+                var user = await GetCurrentUserAsync();
+                toDoItem.ApplicationUserId = user.Id;
+
+                _context.TodoItem.Update(toDoItem);
+                await _context.SaveChangesAsync();
+
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["ApplicationUserId"] = new SelectList(_context.ApplicationUser, "Id", "Id", todoItem.ApplicationUserId);
-            ViewData["TodoStatusId"] = new SelectList(_context.TodoStatus, "Id", "Title", todoItem.TodoStatusId);
-            return View(todoItem);
+            catch
+            {
+                return View();
+            }
         }
 
         // GET: TodoItems/Delete/5
